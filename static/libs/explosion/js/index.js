@@ -43,7 +43,11 @@ class ExplositionGallery {
         this.minHeiht = 600;
         this.padding = 2*16;
         this.showingCount = 4;
-        
+        this.currentIndex = 0;
+
+        this.size = this.linkNodes.lenght;
+
+        this.initModal();
     }
 }
 
