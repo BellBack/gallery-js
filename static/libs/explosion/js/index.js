@@ -1,5 +1,5 @@
 const defaultOptions = {
-    linkClass: '.card'
+    linkClass: '.card',
 };
 
 const explosionClassName = 'explosion';
@@ -45,10 +45,349 @@ class ExplositionGallery {
         this.showingCount = 4;
         this.currentIndex = 0;
 
-        this.size = this.linkNodes.lenght;
+        this.size = this.linkNodes.length;
 
         this.initModal();
+        this.events();
     }
+
+    initModal(){
+        this.modalContainerNode = document.createElement("div");
+        this.modalContainerNode.className = explosionClassName;
+
+        this.modalContainerNode.innerHTML = `
+            <div class="${explosionSummaryClassName}">
+                <div class="${explosionSummaryContentClassName}">
+                    <h2 class="${explosionTitleClassName}"></h2>
+                    <p class="${explosionDescriptionClassName}"></p>
+                </div>
+            </div>
+            <div class="${explosionControlsClassName}">
+                <button class="${explosionCloseClassName}"></button>
+                <div class="${explosionNavsClassName}">
+                    <button class="${explosionNavClassName} ${explosionNavPrevClassName}"></button>
+                    <div class="${explosionCouterClassName}">
+                        1/${this.size}
+                    </div>
+                    <button class="${explosionNavClassName} ${explosionNavNextClassName}"></button>
+                </div>
+            </div>
+            <div class="${explosionImagesClassName}">
+                ${Array.from(this.linkNodes).map((linkNode) => `
+                <img src="${linkNode.getAttribute('href')}" alt="${linkNode.dataset.title}" 
+                class="${explosionImageClassName}" data-title="${linkNode.dataset.title}"
+                data-description="${linkNode.dataset.description}" />
+                `).join('')}
+            </div>
+        `;
+
+        document.body.appendChild(this.modalContainerNode);
+
+        this.explosionImageNodes = this.modalContainerNode.querySelectorAll(`.${explosionImageClassName}`);
+        this.explosionCloseNode = this.modalContainerNode.querySelector(`.${explosionCloseClassName} `);
+        this.explosionControlsNode = this.modalContainerNode.querySelector(`.${explosionControlsClassName}`);
+        this.explosionNavPrevNode = this.modalContainerNode.querySelector(`.${explosionNavPrevClassName} `);
+        this.explosionNavNextNode = this.modalContainerNode.querySelector(`.${explosionNavNextClassName} `);
+        this.explosionCounterNode = this.modalContainerNode.querySelector(`.${explosionCouterClassName} `);
+        this.explosionTitleNode = this.modalContainerNode.querySelector(`.${explosionTitleClassName} `);
+        this.explosionDescriptionNode = this.modalContainerNode.querySelector(`.${explosionDescriptionClassName} `);
+        this.explosionSummaryNode = this.modalContainerNode.querySelector(`.${explosionSummaryClassName} `);
+        this.explosionNavsNode = this.modalContainerNode.querySelector(`.${explosionNavsClassName} `);
+    }
+
+    events() {
+        this.throttledResize = throttle(this.resize, 200);
+        window.addEventListener('resize', this.throttledResize);
+        this.containerNode.addEventListener('click', this.activateGallery);
+        this.explosionNavsNode.addEventListener('click', this.switchImage);
+        this.explosionCloseNode.addEventListener('click', this.closeGallery);
+        window.addEventListener('keyup', this.keyEsc)
+    }
+
+    resize = () => {
+        if(this.modalContainerNode.classList.contains(explosionOpenedClassName)){
+            this.setInitSizesToImages();
+            this.setGalleryStyles();
+        }
+    }
+
+    keyEsc = (event) => {
+        if(this.modalContainerNode.classList.contains(explosionOpenedClassName)){
+            if(event.key == 'Escape' || event.key == 'Esc' || event.keyCode === 27){
+                this.closeGallery();
+            }
+        }
+    }
+
+    closeGallery = (event) => {
+        this.setInitPositionsToImages();
+        this.explosionImageNodes.forEach((imageNode) => {
+            imageNode.style.opacity = 1;
+        });
+        this.explosionSummaryNode.style.width = '0';
+        this.explosionControlsNode.style.marginTop = '3000px';
+
+        fadeOut(this.modalContainerNode, () => {
+            this.modalContainerNode.classList.remove(explosionOpenedClassName);
+        });
+    }
+
+    switchImage = (event) => {
+        event.preventDefault();
+
+        const buttonNode = event.target.closest('button');
+        if(!buttonNode){
+            return;
+        }
+
+        if(buttonNode.classList.contains(explosionNavPrevClassName) && this.currentIndex > 0) {
+            this.currentIndex -= 1;
+        }
+
+        if(buttonNode.classList.contains(explosionNavNextClassName) && this.currentIndex < this.size - 1) {
+            this.currentIndex += 1;
+        }
+
+        this.switchChanges();
+    }
+
+    activateGallery = (event) => {
+        event.preventDefault();
+        const linkNode = event.target.closest('a');
+
+        if (
+            !linkNode
+            || this.modalContainerNode.classList.contains(explosionOpenedClassName)
+            || this.modalContainerNode.classList.contains(explosionOpeningClassName)
+        ){
+            return;
+        }
+
+        this.currentIndex = Array.from(this.linkNodes).findIndex((itemNode) => linkNode === itemNode);
+        this.modalContainerNode.classList.add(explosionOpeningClassName);
+
+        fadeIn(this.modalContainerNode, () => {
+            this.modalContainerNode.classList.remove(explosionOpeningClassName);
+            this.modalContainerNode.classList.add(explosionOpenedClassName);
+            this.switchChanges();
+        });
+
+        this.setInitSizesToImages();
+        this.setInitPositionsToImages();
+    }
+
+    setInitSizesToImages(){
+        this.linkNodes.forEach((linkNode, index) => {
+            const data = linkNode.getBoundingClientRect();
+            this.explosionImageNodes[index].style.width = data.width + 'px';
+            this.explosionImageNodes[index].style.height = data.height + 'px';
+        });
+    }
+
+    setInitPositionsToImages(){
+        this.linkNodes.forEach((linkNode, index) => {
+            const data = linkNode.getBoundingClientRect();
+            this.setPositionStyles(
+                this.explosionImageNodes[index],
+                data.left,
+                data.top,
+            );
+        });
+    }
+
+    setPositionStyles(element, x, y){
+        element.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+    }
+
+    switchChanges() {
+        this.setCurrentState();
+        this.switchDisabledNav();
+        this.changeCounter();
+        this.changeSummary();
+    }
+
+    changeSummary() {
+        const content = this.explosionImageNodes[this.currentIndex].dataset;
+        this.explosionTitleNode.innerText = content.title;
+        this.explosionDescriptionNode.innerText = content.description;
+    }
+
+    switchDisabledNav(){
+        if(this.currentIndex === 0 && !this.explosionNavPrevNode.disabled) {
+            this.explosionNavPrevNode.disabled = true;
+        }
+
+        if(this.currentIndex > 0 && this.explosionNavPrevNode.disabled) {
+            this.explosionNavPrevNode.disabled = false;
+        }
+
+        if(this.currentIndex === this.size - 1 && !this.explosionNavNextNode.disabled) {
+            this.explosionNavNextNode.disabled = true;
+        }
+
+        if(this.currentIndex < this.size - 1 && this.explosionNavNextNode.disabled) {
+            this.explosionNavNextNode.disabled = false;
+        }
+    }
+
+    changeCounter(){
+        this.explosionCounterNode.innerText = `${this.currentIndex + 1}/${this.size}`;
+    }
+
+    setCurrentState() {
+        this.explosionPrevHiddenImageNodes = [];
+        this.explosionPrevShowingImageNodes = [];
+        this.explosionActiveImageNodes = [];
+        this.explosionNextShowingImageNodes = [];
+        this.explosionNextHiddenImageNodes = [];
+
+        this.currentIndex
+        this.showingCount
+
+        this.explosionImageNodes.forEach((imageNode, index) => {
+            if(index + this.showingCount < this.currentIndex){
+                this.explosionPrevHiddenImageNodes.unshift(imageNode);
+            }else if(index < this.currentIndex) {
+                this.explosionPrevShowingImageNodes.unshift(imageNode);
+            }else if(index === this.currentIndex) {
+                this.explosionActiveImageNodes.push(imageNode);
+            }else if(index <= this.currentIndex + this.showingCount) {
+                this.explosionNextShowingImageNodes.push(imageNode);
+            }else {
+                this.explosionNextHiddenImageNodes.push(imageNode);
+            }
+        });
+
+        this.setGalleryStyles();
+    }
+
+    setGalleryStyles() {
+        const imageWidth = this.linkNodes[0].offsetWidth;
+        const imageHeight = this.linkNodes[0].offsetHeight;
+        const modalWidth = Math.max(this.minWidth, window.innerWidth);
+        const modalHeight = Math.max(this.minHeiht, window.innerHeight);
+
+        this.explosionPrevHiddenImageNodes.forEach((node) => (
+            this.setImageStyles(node, {
+                top: -modalHeight,
+                left: 0.29 * modalWidth,
+                opacity: 0.1,
+                zIndex: 1,
+                scale: 0.4, 
+            })
+        ));
+
+        this.setImageStyles(this.explosionPrevShowingImageNodes[0], {
+            top: (modalHeight - imageHeight),
+            left: 0.25 * modalWidth,
+            opacity: 0.4,
+            zIndex: 4,
+            scale: 0.75,
+        });
+
+        this.setImageStyles(this.explosionPrevShowingImageNodes[1], {
+            top: 0.35 * modalHeight ,
+            left: 0.06 * modalWidth,
+            opacity: 0.3,
+            zIndex: 3,
+            scale: 0.6,
+        });
+
+        this.setImageStyles(this.explosionPrevShowingImageNodes[2], {
+            top: 0 , //0.095 * modalHeight
+            left: 0.15 * modalWidth,
+            opacity: 0.2,
+            zIndex: 2,
+            scale: 0.5,
+        });
+
+        this.setImageStyles(this.explosionPrevShowingImageNodes[3], {
+            top: -0.3  * modalHeight ,
+            left: 0.29 * modalWidth,
+            opacity: 0.1,
+            zIndex: 1,
+            scale: 0.4,
+        });
+
+        this.explosionActiveImageNodes.forEach((node) => (
+            this.setImageStyles(node, {
+                top: (modalHeight - imageHeight) / 2,
+                left: (modalWidth - imageWidth) / 2,
+                opacity: 1,
+                zIndex: 5,
+                scale: 1.2,
+            })
+        ));
+
+        this.setImageStyles(this.explosionNextShowingImageNodes[0], {
+            top: 0 ,
+            left: 0.52 * modalWidth,
+            opacity: 0.4,
+            zIndex: 4,
+            scale: 0.75,
+        });
+
+        this.setImageStyles(this.explosionNextShowingImageNodes[1], {
+            top: 0.12 * modalHeight ,
+            left: 0.73 * modalWidth,
+            opacity: 0.3,
+            zIndex: 3,
+            scale: 0.6,
+        });
+
+        this.setImageStyles(this.explosionNextShowingImageNodes[2], {
+            top: 0.49 * modalHeight ,
+            left: 0.67 * modalWidth,
+            opacity: 0.2,
+            zIndex: 2,
+            scale: 0.5,
+        });
+
+        this.setImageStyles(this.explosionNextShowingImageNodes[3], {
+            top: 0.67 * modalHeight ,
+            left: 0.53 * modalWidth,
+            opacity: 0.1,
+            zIndex: 1,
+            scale: 0.4,
+        });
+
+        this.explosionNextHiddenImageNodes.forEach((node) => (
+            this.setImageStyles(node, {
+                top: modalHeight ,
+                left: 0.53 * modalWidth ,
+                opacity: 0.1,
+                zIndex: 0.4,
+                scale: 0.4,
+            })
+        ));
+
+        this.setControlsStyles(
+            this.explosionControlsNode,
+            {
+                marginTop: (modalHeight - imageHeight * 1.2) / 2,
+                height: imageHeight * 1.2
+            }
+        );
+
+        this.explosionSummaryNode.style.width = '50%';
+    }
+
+    setImageStyles(element, {top, left, opacity, zIndex, scale}) {
+        if(!element) {
+            return;
+        }
+
+        element.style.opacity = opacity;
+        element.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0) scale(${scale})`;
+        element.style.zIndex = zIndex;
+    }
+
+    setControlsStyles(element, {marginTop, height}) {
+        element.style.marginTop = marginTop + 'px' 
+        element.style.height = height + 'px' 
+
+    }
+
 }
 
 /**
